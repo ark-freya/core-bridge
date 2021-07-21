@@ -1,0 +1,37 @@
+{
+    "name": "@alessiodf/core-bridge-2.7",
+    "description": "Communicate with ARK Core 3.0 nodes in Core 2.7",
+    "homepage": "https://github.com/alessiodf/core-bridge/tree/core-bridge-2.7",
+    "version": "0.0.1",
+    "contributors": [
+        "alessiodf <alessiodf@pm.me>",
+        "cactus1549 <cactus1549pool@gmail.com>"
+    ],
+    "license": "GPL-3.0-or-later",
+    "main": "dist/index.js",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "compile": "../../node_modules/typescript/bin/tsc",
+        "build": "yarn clean && yarn compile",
+        "clean": "del dist",
+        "lint": "../../node_modules/tslint/bin/tslint -c ../../tslint.json -p ../../tslint-config.json 'src/**/*.ts'--exclude='src/**/*.d.ts' --fix",
+        "prettier": "prettier --write './**/*.{ts,js,json,md}'",
+        "format": "yarn lint && yarn prettier"
+    },
+    "dependencies": {
+        "protobufjs": "~6.10.1"
+    },
+    "devDependencies": {
+        "@arkecosystem/core": "^2.7.0",
+        "prettier": "^2.0.2"
+    },
+    "prettier": {
+        "printWidth": 180,
+        "singleQuote": false,
+        "tabWidth": 4,
+        "trailingComma": "none",
+        "useTabs": false
+    }
+}
