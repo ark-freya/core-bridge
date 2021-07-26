@@ -20,6 +20,9 @@
         "prettier": "prettier --write './**/*.{ts,js,json,md}'",
         "format": "yarn lint && yarn prettier"
     },
+    "dependencies": {
+        "json-validator-duplicated-keys": "^1.0.1"
+    },
     "devDependencies": {
         "@arkecosystem/core": "^3.0.0 || ^3.0.0-next.0",
         "prettier": "^2.0.2"
