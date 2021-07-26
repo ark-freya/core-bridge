@@ -14,6 +14,20 @@ const workerOptions = JSON.parse(process.env.workerInitOptions);
 
 SCServerSocket.prototype.send = function (message) {
     if (!this.socket._isNes) {
+        if (workerOptions.hidePrerelease && workerOptions.isPrerelease && message !== "#1") {
+            try {
+                const response = JSON.parse(message);
+                if (response.data && response.data.headers && response.data.headers.version) {
+                    response.data.headers.version = response.data.headers.version.replace(/-(.*)/, "");
+                }
+                if (response.data && response.data.data && response.data.data.config && response.data.data.config.version) {
+                    response.data.data.config.version = response.data.data.config.version.replace(/-(.*)/, "");
+                }
+                message = JSON.stringify(response);
+            } catch {
+                //
+            }
+        }
         return this._send(message);
     }
 
@@ -60,7 +74,7 @@ SCServerSocket.prototype.send = function (message) {
                                     data.data.config.plugins[plugin] = { port: data.data.config.plugins[plugin].port, enabled: data.data.config.plugins[plugin].enabled };
                                 }
                             }
-                            data.data.config.version = `3.0.0-bridge-${workerOptions.version}`;
+                            data.data.config.version = workerOptions.version;
                             payload = getStatus.response.serialize(data.data);
                             break;
                         case "p2p.transactions.postTransactions":

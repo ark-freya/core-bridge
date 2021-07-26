@@ -24,7 +24,7 @@ export const plugin: Container.IPluginDescriptor = {
             return;
         }
 
-        P2P.register();
+        P2P.register(options);
 
         logger.info("Loaded Core Bridge");
         logger.info(`Core ${app.getVersion()} can now communicate with Core 3.0`);

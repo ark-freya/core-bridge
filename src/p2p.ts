@@ -11,26 +11,34 @@ import { postTransactions } from "./codecs/transactions";
 
 import { parseNesMessage, stringifyNesMessage } from "./nes";
 
+import { parse } from "semver";
+
 export class P2P {
-    private static version: string;
+    public static register(options): void {
+        let version: string = app.getVersion();
+        const parsedVersion = parse(version);
 
-    public static register(): void {
-        P2P.version = app.getVersion().replace(/-(.*)/, "");
+        const versionNonPrerelease = version.replace(/-(.*)/, "");
+        const isPrerelease = version !== versionNonPrerelease;
 
-        P2P.extendSCClient();
-        P2P.extendSCServer();
+        version = version.replace(`${parsedVersion.major}.${parsedVersion.minor}.`, `3.${parsedVersion.major}${parsedVersion.minor}.`);
+
+        if (options.hidePrerelease) {
+            version = versionNonPrerelease;
+        }
+
+        P2P.extendSCClient(version, options.hidePrerelease, isPrerelease);
+        P2P.extendSCServer(version, options.hidePrerelease, isPrerelease);
     }
 
-    private static extendSCClient(): void {
-        const version = `3.0.0-bridge-${P2P.version}`;
-
+    private static extendSCClient(version: string, hidePrerelease: boolean, isPrerelease: boolean): void {
         SCTransport.prototype._send = SCTransport.prototype.send;
         SCTransport.prototype.__onClose = SCTransport.prototype._onClose;
         SCTransport.prototype.__onMessage = SCTransport.prototype._onMessage;
 
         SCTransport.prototype._onMessage = function (message) {
-            if (this.options.path === "/") {
-                try {
+            try {
+                if (this.options.path === "/") {
                     const nesMessage = parseNesMessage(message);
                     let scObject: any = { rid: nesMessage.id, data: { data: {}, headers: {} } };
                     switch (nesMessage.type) {
@@ -68,7 +76,15 @@ export class P2P {
                                         for (const plugin of Object.keys(data.config.plugins)) {
                                             data.config.plugins[plugin] = { port: data.config.plugins[plugin].port, enabled: data.config.plugins[plugin].enabled };
                                         }
-                                        data.config.version = `${P2P.version}-bridge-${data.config.version.replace(/-(.*)/, "")}`;
+                                        const parsedVersion = parse(data.config.version);
+
+                                        data.config.version = data.config.version.replace(
+                                            `${parsedVersion.major}.${parsedVersion.minor}.`,
+                                            `2.${parsedVersion.major}${parsedVersion.minor}.`
+                                        );
+                                        if (hidePrerelease) {
+                                            data.config.version = data.config.version.replace(/-(.*)/, "");
+                                        }
                                         scObject.data.data = data;
                                         scObject.data.headers.height = data.state.height;
                                         break;
@@ -97,20 +113,23 @@ export class P2P {
                         message = JSON.stringify(scObject);
                         this.socket._receiver._maxPayload = constants.DEFAULT_MAX_PAYLOAD_CLIENT;
                     }
-                } catch {
-                    //
-                }
-            } else if (!this._receivedData && message.length < 256) {
-                try {
+                } else if (!this._receivedData && message.length < 256) {
                     const { data } = JSON.parse(message);
                     if (data.isNes) {
                         this.socket.close();
                         return;
                     }
-                } catch {
-                    //
+                } else if (hidePrerelease && isPrerelease) {
+                    const response = JSON.parse(message);
+                    if (response.data && response.data.headers && response.data.headers.version) {
+                        response.data.headers.version = response.data.headers.version.replace(/-(.*)/, "");
+                    }
+                    message = JSON.stringify(response);
                 }
+            } catch {
+                //
             }
+
             this._receivedData = true;
             return this.__onMessage(message);
         };
@@ -230,14 +249,16 @@ export class P2P {
         };
     }
 
-    private static extendSCServer(): void {
+    private static extendSCServer(version: string, hidePrerelease: boolean, isPrerelease: boolean): void {
         const p2p = app.resolvePlugin("p2p");
         if (p2p && !app.resolvePlugin("core-chameleon")) {
             const server: any = p2p.getMonitor().getServer();
             server.options.oldCwd = process.cwd();
             server.options.oldWorkerController = server.options.workerController;
             server.options.workerController = __dirname + "/worker.js";
-            server.options.version = P2P.version;
+            server.options.version = version;
+            server.options.hidePrerelease = hidePrerelease;
+            server.options.isPrerelease = isPrerelease;
             server.workerCluster.removeAllListeners("exit");
             server.killWorkers({ killClusterMaster: true });
             server._launchWorkerCluster();
