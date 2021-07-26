@@ -141,12 +141,11 @@ const isValidRequest = (object, maxTransactionsPerRequest: number): boolean => {
                     Array.isArray(object.data.data.transactions) &&
                     object.data.data.transactions.length <= maxTransactionsPerRequest
                 ) {
-                    // TODO: Import validateTransactionLight function from Core 2.7
-                    /* for (const transaction of object.data.data.transactions) {
+                    for (const transaction of object.data.data.transactions) {
                         if (!validateTransactionLight(transaction)) {
-                             return false;
+                            return false;
                         }
-                    } */
+                    }
                 } else {
                     return false;
                 }
@@ -174,4 +173,65 @@ const isValidRequest = (object, maxTransactionsPerRequest: number): boolean => {
     }
 
     return true;
+};
+
+const validateTransactionLight = (transaction: any): boolean => {
+    if (!transaction || typeof transaction !== "object") {
+        return false;
+    }
+
+    const maxMainProperties = 50;
+    const maxAssetProperties = 100;
+    const maxMultiPayments = 128;
+
+    if (Object.keys(transaction).length > maxMainProperties) {
+        return false;
+    }
+
+    if (transaction.asset && typeof transaction.asset === "object") {
+        if (transaction.asset.payments && Array.isArray(transaction.asset.payments)) {
+            if (transaction.asset.payments.length > maxMultiPayments) {
+                return false;
+            }
+
+            for (const p of transaction.asset.payments) {
+                if (!p || typeof p !== "object" || typeof p.recipientId !== "string" || typeof p.amount !== "string" || Object.keys(p).length !== 2) {
+                    return false;
+                }
+            }
+
+            if (Object.keys(transaction.asset).length > 1) {
+                return false;
+            }
+        } else {
+            if (objectHasMorePropertiesThan(transaction.asset, maxAssetProperties)) {
+                return false;
+            }
+        }
+    }
+
+    const shallowClone = { ...transaction };
+    delete shallowClone.asset;
+    if (objectHasMorePropertiesThan(shallowClone, maxMainProperties)) {
+        return false;
+    }
+
+    return true;
+};
+
+const objectHasMorePropertiesThan = (obj: object, maxProperties: number): boolean => {
+    let propertiesCount = 0;
+    try {
+        JSON.stringify(obj, (key, value) => {
+            propertiesCount++;
+            if (propertiesCount > maxProperties) {
+                throw new Error();
+            }
+            return value;
+        });
+    } catch {
+        return true;
+    }
+
+    return false;
 };
