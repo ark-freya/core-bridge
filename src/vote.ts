@@ -1,7 +1,7 @@
 import { app } from "@arkecosystem/core-container";
 import { Database, State } from "@arkecosystem/core-interfaces";
 import { Handlers } from "@arkecosystem/core-transactions";
-import { Enums, Interfaces, Managers, Transactions, Utils } from "@arkecosystem/crypto";
+import { Enums, Interfaces, Transactions, Utils } from "@arkecosystem/crypto";
 import { TransactionHandler } from "@arkecosystem/core-transactions/dist/handlers";
 import { validator } from "@arkecosystem/crypto/dist/validation";
 import { schemas } from "@arkecosystem/crypto/dist/transactions/types";
@@ -10,31 +10,22 @@ import { ExtendedVoteTransactionHandler } from "./handler";
 
 export class Vote {
     static register(options): void {
-        Vote.extendSchema(options.aip37);
-        Vote.extendHandler();
+        Vote.extendSchema();
+        Vote.extendHandler(options.aip37);
         Vote.extendWalletManager();
     }
 
-    private static extendHandler(): void {
-        const service: TransactionHandler = new ExtendedVoteTransactionHandler();
+    private static extendHandler(milestoneHeight: number): void {
+        const service: TransactionHandler = new ExtendedVoteTransactionHandler(milestoneHeight);
         const { typeGroup, type } = service.getConstructor();
 
         const internalType: Transactions.InternalTransactionType = Transactions.InternalTransactionType.from(type, typeGroup);
         (Handlers.Registry as any).registeredTransactionHandlers.set(internalType, service);
     }
 
-    private static extendSchema(milestoneHeight: number): void {
-        const ajv = validator.getInstance();
-
-        ajv.addKeyword("aip37", {
-            validate: (schema, data) => {
-                const active = schema && (Managers.configManager.getMilestone().aip37 || (milestoneHeight && Managers.configManager.getHeight() >= milestoneHeight));
-                return (active && data.length <= 2) || data.length === 1;
-            }
-        });
-
+    private static extendSchema(): void {
         validator.extendTransaction(schemas.vote, true);
-        validator.extendTransaction(schemas.extend(schemas.vote, { properties: { asset: { properties: { votes: { maxItems: 2, aip37: true } } } } }));
+        validator.extendTransaction(schemas.extend(schemas.vote, { properties: { asset: { properties: { votes: { maxItems: 2 } } } } }));
     }
 
     private static async extendWalletManager(): Promise<void> {

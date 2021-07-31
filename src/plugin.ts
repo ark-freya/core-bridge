@@ -37,9 +37,9 @@ export const plugin: Container.IPluginDescriptor = {
             Math.trunc(+options.aip37) || Infinity
         );
 
-        if (aip37 !== Infinity) {
-            Vote.register(options);
+        Vote.register(options);
 
+        if (aip37 !== Infinity) {
             const currentHeight = (await app.resolvePlugin<Database.IDatabaseService>("database").getLastBlock()).data.height;
             if (aip37 > currentHeight) {
                 logger.debug(`AIP37 will activate after height ${aip37.toLocaleString()}`);

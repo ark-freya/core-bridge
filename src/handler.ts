@@ -1,12 +1,32 @@
 import { Database, State, EventEmitter } from "@arkecosystem/core-interfaces";
 import { ApplicationEvents } from "@arkecosystem/core-event-emitter";
-import { Interfaces } from "@arkecosystem/crypto";
+import { Interfaces, Managers } from "@arkecosystem/crypto";
 import { TransactionHandler } from "@arkecosystem/core-transactions/dist/handlers";
-import { AlreadyVotedError, NoVoteError, UnvoteMismatchError, VotedForResignedDelegateError, VotedForNonDelegateError } from "@arkecosystem/core-transactions/dist/errors";
+import {
+    AlreadyVotedError,
+    NoVoteError,
+    TransactionError,
+    UnvoteMismatchError,
+    VotedForResignedDelegateError,
+    VotedForNonDelegateError
+} from "@arkecosystem/core-transactions/dist/errors";
 import { VoteTransactionHandler } from "@arkecosystem/core-transactions/dist/handlers/vote";
 import { TransactionReader } from "@arkecosystem/core-transactions/dist/transaction-reader";
 
+export class SwitchVoteDisabledError extends TransactionError {
+    public constructor() {
+        super("Failed to apply transaction, because switch-vote is disabled.");
+    }
+}
+
 export class ExtendedVoteTransactionHandler extends VoteTransactionHandler {
+    private milestoneHeight: number;
+
+    public constructor(milestoneHeight: number) {
+        super();
+        this.milestoneHeight = milestoneHeight;
+    }
+
     public async bootstrap(connection: Database.IConnection, walletManager: State.IWalletManager): Promise<void> {
         const reader: TransactionReader = await TransactionReader.create(connection, this.getConstructor());
 
@@ -42,6 +62,13 @@ export class ExtendedVoteTransactionHandler extends VoteTransactionHandler {
 
     public async throwIfCannotBeApplied(transaction: Interfaces.ITransaction, wallet: State.IWallet, walletManager: State.IWalletManager): Promise<void> {
         const { data }: Interfaces.ITransaction = transaction;
+
+        if (data.asset.votes.length > 1) {
+            const switchVoteEnabled: boolean = Managers.configManager.getMilestone().aip37 || (this.milestoneHeight && Managers.configManager.getHeight() >= this.milestoneHeight);
+            if (!switchVoteEnabled) {
+                throw new SwitchVoteDisabledError();
+            }
+        }
 
         const votes: string[] = data.asset.votes;
         let walletVote: string = wallet.getAttribute("vote");
