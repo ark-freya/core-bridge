@@ -9,13 +9,13 @@ import { schemas } from "@arkecosystem/crypto/dist/transactions/types";
 import { ExtendedVoteTransactionHandler } from "./handler";
 
 export class Vote {
-    static register(options): void {
-        Vote.extendSchema();
-        Vote.extendHandler(options.aip37);
-        Vote.extendWalletManager();
+    public register(options): void {
+        this.extendSchema();
+        this.extendHandler(options.aip37);
+        this.extendWalletManager();
     }
 
-    private static extendHandler(milestoneHeight: number): void {
+    private extendHandler(milestoneHeight: number): void {
         const service: TransactionHandler = new ExtendedVoteTransactionHandler(milestoneHeight);
         const { typeGroup, type } = service.getConstructor();
 
@@ -23,12 +23,12 @@ export class Vote {
         (Handlers.Registry as any).registeredTransactionHandlers.set(internalType, service);
     }
 
-    private static extendSchema(): void {
+    private extendSchema(): void {
         validator.extendTransaction(schemas.vote, true);
         validator.extendTransaction(schemas.extend(schemas.vote, { properties: { asset: { properties: { votes: { maxItems: 2 } } } } }));
     }
 
-    private static async extendWalletManager(): Promise<void> {
+    private async extendWalletManager(): Promise<void> {
         const database: Database.IDatabaseService = app.resolvePlugin<Database.IDatabaseService>("database");
 
         (database.walletManager as any).updateVoteBalances = function (

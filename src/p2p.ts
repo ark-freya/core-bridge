@@ -5,7 +5,7 @@ import { Server } from "./server";
 import { parse } from "semver";
 
 export class P2P {
-    public static register(options): void {
+    public register(options): void {
         let version: string = app.getVersion();
         const parsedVersion = parse(version);
 

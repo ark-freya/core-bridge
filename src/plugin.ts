@@ -24,7 +24,8 @@ export const plugin: Container.IPluginDescriptor = {
             return;
         }
 
-        P2P.register(options);
+        const p2p: P2P = new P2P();
+        p2p.register(options);
 
         logger.info("Loaded Core Bridge");
         logger.info(`Core ${app.getVersion()} can now communicate with Core 3.0`);
@@ -37,7 +38,8 @@ export const plugin: Container.IPluginDescriptor = {
             Math.trunc(+options.aip37) || Infinity
         );
 
-        Vote.register(options);
+        const switchVote: Vote = new Vote();
+        switchVote.register(options);
 
         if (aip37 !== Infinity) {
             const currentHeight = (await app.resolvePlugin<Database.IDatabaseService>("database").getLastBlock()).data.height;
