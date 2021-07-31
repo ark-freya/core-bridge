@@ -1,17 +1,17 @@
-import { Database, State, EventEmitter } from "@arkecosystem/core-interfaces";
 import { ApplicationEvents } from "@arkecosystem/core-event-emitter";
-import { Interfaces, Managers } from "@arkecosystem/crypto";
-import { TransactionHandler } from "@arkecosystem/core-transactions/dist/handlers";
+import { Database, EventEmitter, State } from "@arkecosystem/core-interfaces";
 import {
     AlreadyVotedError,
     NoVoteError,
     TransactionError,
     UnvoteMismatchError,
-    VotedForResignedDelegateError,
-    VotedForNonDelegateError
+    VotedForNonDelegateError,
+    VotedForResignedDelegateError
 } from "@arkecosystem/core-transactions/dist/errors";
+import { TransactionHandler } from "@arkecosystem/core-transactions/dist/handlers";
 import { VoteTransactionHandler } from "@arkecosystem/core-transactions/dist/handlers/vote";
 import { TransactionReader } from "@arkecosystem/core-transactions/dist/transaction-reader";
+import { Interfaces, Managers } from "@arkecosystem/crypto";
 
 export class SwitchVoteDisabledError extends TransactionError {
     public constructor() {
@@ -71,7 +71,7 @@ export class ExtendedVoteTransactionHandler extends VoteTransactionHandler {
         }
 
         const votes: string[] = data.asset.votes;
-        let walletVote: string = wallet.getAttribute("vote");
+        let walletVote: string | undefined = wallet.getAttribute("vote");
 
         for (const vote of votes) {
             const delegatePublicKey: string = vote.slice(1);

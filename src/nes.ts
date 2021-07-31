@@ -1,4 +1,18 @@
-export const parseNesMessage = (buf: Buffer) => {
+export interface NesMessage {
+    type?: string;
+    id?: number;
+    path?: string;
+    payload?: Buffer;
+    statusCode?: number;
+    version?: string;
+    socket?: string;
+    heartbeat?: {
+        interval?: number;
+        timeout?: number;
+    };
+}
+
+export const parseNesMessage = (buf: Buffer): NesMessage => {
     const messageLength = buf.byteLength;
     if (messageLength < 14) {
         throw new Error("Nes message is below minimum length");
@@ -36,10 +50,10 @@ export const parseNesMessage = (buf: Buffer) => {
     return { version, type, id, statusCode, path, payload, socket, heartbeat };
 };
 
-export const stringifyNesMessage = (messageObj): Buffer => {
+export const stringifyNesMessage = (messageObj: NesMessage): Buffer => {
     const pathBuf = Buffer.from(messageObj.path || "");
     const socketBuf = Buffer.from(messageObj.socket || "");
-    const payloadBuf = Buffer.from(messageObj.payload || "");
+    const payloadBuf = Buffer.from(messageObj.payload || Buffer.alloc(0));
 
     const bufHeader = Buffer.alloc(14);
 

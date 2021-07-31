@@ -1,17 +1,17 @@
 import { app } from "@arkecosystem/core-container";
-import { Database, State } from "@arkecosystem/core-interfaces";
+import { Container, Database, State } from "@arkecosystem/core-interfaces";
 import { Handlers } from "@arkecosystem/core-transactions";
-import { Enums, Interfaces, Transactions, Utils } from "@arkecosystem/crypto";
 import { TransactionHandler } from "@arkecosystem/core-transactions/dist/handlers";
-import { validator } from "@arkecosystem/crypto/dist/validation";
+import { Enums, Interfaces, Transactions, Utils } from "@arkecosystem/crypto";
 import { schemas } from "@arkecosystem/crypto/dist/transactions/types";
+import { validator } from "@arkecosystem/crypto/dist/validation";
 
 import { ExtendedVoteTransactionHandler } from "./handler";
 
 export class Vote {
-    public register(options): void {
+    public register(options: Container.IPluginOptions): void {
         this.extendSchema();
-        this.extendHandler(options.aip37);
+        this.extendHandler(Number(options.aip37));
         this.extendWalletManager();
     }
 

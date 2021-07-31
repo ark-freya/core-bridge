@@ -1,4 +1,5 @@
 import { Utils } from "@arkecosystem/crypto";
+
 import { blocks } from "./proto/protos";
 
 const hardLimitNumberOfBlocks = 400;
@@ -10,7 +11,7 @@ export const getBlocks = {
         deserialize: (payload: Buffer): blocks.IGetBlocksRequest => blocks.GetBlocksRequest.decode(payload)
     },
     response: {
-        serialize: (obj): Buffer => {
+        serialize: (obj: any[]): Buffer => {
             const blocksEncoded: Buffer[] = [];
             for (const block of obj) {
                 const blockEncoded = blocks.GetBlocksResponse.BlockHeader.encode({
@@ -36,7 +37,7 @@ export const getBlocks = {
                 return Buffer.concat([acc, txByteLength, curr]);
             }, Buffer.alloc(0));
         },
-        deserialize: (payload: Buffer) => {
+        deserialize: (payload: Buffer): any[] => {
             const blocksBuffer = Buffer.from(payload);
             const blocksBuffers: Buffer[] = [];
             for (let offset = 0; offset < blocksBuffer.byteLength - 4; ) {
@@ -62,9 +63,9 @@ export const getBlocks = {
                 }
                 return {
                     ...blockWithTxBuffer,
-                    totalAmount: new Utils.BigNumber(blockWithTxBuffer.totalAmount as string),
-                    totalFee: new Utils.BigNumber(blockWithTxBuffer.totalFee as string),
-                    reward: new Utils.BigNumber(blockWithTxBuffer.reward as string),
+                    totalAmount: new Utils.BigNumber(blockWithTxBuffer.totalAmount),
+                    totalFee: new Utils.BigNumber(blockWithTxBuffer.totalFee),
+                    reward: new Utils.BigNumber(blockWithTxBuffer.reward),
                     transactions: txs
                 };
             });
@@ -75,7 +76,7 @@ export const getBlocks = {
 export const postBlock = {
     request: {
         serialize: (obj: blocks.IPostBlockRequest): Buffer => Buffer.from(blocks.PostBlockRequest.encode(obj).finish()),
-        deserialize: (payload: Buffer) => {
+        deserialize: (payload: Buffer): { block: Buffer } => {
             const decoded = blocks.PostBlockRequest.decode(payload);
             return {
                 ...decoded,

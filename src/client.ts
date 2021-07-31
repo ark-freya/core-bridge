@@ -1,16 +1,13 @@
 import { constants } from "@arkecosystem/core-p2p/dist/constants";
 import { Transactions } from "@arkecosystem/crypto";
-
+import { parse } from "semver";
 import { SCTransport } from "socketcluster-client/lib/sctransport";
 import WebSocket from "ws";
 
 import { getBlocks, postBlock } from "./codecs/blocks";
 import { getCommonBlocks, getPeers, getStatus } from "./codecs/peer";
 import { postTransactions } from "./codecs/transactions";
-
 import { parseNesMessage, stringifyNesMessage } from "./nes";
-
-import { parse } from "semver";
 
 export class Client {
     public extend(version: string, hidePrerelease: boolean, isPrerelease: boolean): void {
@@ -24,13 +21,15 @@ export class Client {
                     const nesMessage = parseNesMessage(message);
                     let scObject: any = { rid: nesMessage.id, data: { data: {}, headers: {} } };
                     switch (nesMessage.type) {
-                        case "ping":
+                        case "ping": {
                             message = "#1";
                             break;
-                        case "hello":
+                        }
+                        case "hello": {
                             scObject = { ...scObject, data: { id: nesMessage.socket, pingTimeout: 60000, isAuthenticated: false } };
                             break;
-                        case "request":
+                        }
+                        case "request": {
                             if (!this.socket._ids) {
                                 this.socket._ids = {};
                             }
@@ -39,7 +38,7 @@ export class Client {
 
                             if (nesMessage.statusCode === 200 && nesMessage.payload) {
                                 switch (event) {
-                                    case "p2p.peer.getBlocks":
+                                    case "p2p.peer.getBlocks": {
                                         scObject.data.data = getBlocks.response.deserialize(nesMessage.payload).map((block) => {
                                             if (block.transactions.length === 0) {
                                                 delete block.transactions;
@@ -47,35 +46,46 @@ export class Client {
                                             return block;
                                         });
                                         break;
-                                    case "p2p.peer.getCommonBlocks":
+                                    }
+                                    case "p2p.peer.getCommonBlocks": {
                                         scObject.data.data = getCommonBlocks.response.deserialize(nesMessage.payload);
                                         break;
-                                    case "p2p.peer.getPeers":
+                                    }
+                                    case "p2p.peer.getPeers": {
                                         scObject.data.data = getPeers.response.deserialize(nesMessage.payload).map((peer) => ({ ip: peer.ip }));
                                         break;
-                                    case "p2p.peer.getStatus":
+                                    }
+                                    case "p2p.peer.getStatus": {
                                         const data = getStatus.response.deserialize(nesMessage.payload);
-                                        for (const plugin of Object.keys(data.config.plugins)) {
-                                            data.config.plugins[plugin] = { port: data.config.plugins[plugin].port, enabled: data.config.plugins[plugin].enabled };
-                                        }
-                                        const parsedVersion = parse(data.config.version);
+                                        if (data.config) {
+                                            if (data.config.plugins) {
+                                                for (const plugin of Object.keys(data.config.plugins)) {
+                                                    data.config.plugins[plugin] = { port: data.config.plugins[plugin].port, enabled: data.config.plugins[plugin].enabled };
+                                                }
+                                            }
 
-                                        data.config.version = data.config.version.replace(
-                                            `${parsedVersion.major}.${parsedVersion.minor}.`,
-                                            `2.${parsedVersion.major}${parsedVersion.minor}.`
-                                        );
-                                        if (hidePrerelease) {
-                                            data.config.version = data.config.version.replace(/-(.*)/, "");
+                                            const parsedVersion = parse(data.config.version);
+
+                                            data.config.version = data.config.version.replace(
+                                                `${parsedVersion.major}.${parsedVersion.minor}.`,
+                                                `2.${parsedVersion.major}${parsedVersion.minor}.`
+                                            );
+                                            if (hidePrerelease) {
+                                                data.config.version = data.config.version.replace(/-(.*)/, "");
+                                            }
                                         }
                                         scObject.data.data = data;
-                                        scObject.data.headers.height = data.state.height;
+                                        scObject.data.headers.height = (data.state as any).height;
                                         break;
-                                    case "p2p.peer.postBlock":
+                                    }
+                                    case "p2p.peer.postBlock": {
                                         scObject.data.data = {};
                                         break;
-                                    case "p2p.peer.postTransactions":
+                                    }
+                                    case "p2p.peer.postTransactions": {
                                         scObject.data.data = [];
                                         break;
+                                    }
                                 }
                             } else if (nesMessage.payload) {
                                 const errorMessage = nesMessage.payload.toString();
@@ -94,6 +104,7 @@ export class Client {
                             clearTimeout(this.socket._timers[nesMessage.id]);
                             delete this.socket._timers[nesMessage.id];
                             break;
+                        }
                     }
                     if (message !== "#1") {
                         message = JSON.stringify(scObject);
@@ -141,32 +152,40 @@ export class Client {
                         let maxPayload = constants.DEFAULT_MAX_PAYLOAD_CLIENT;
 
                         switch (event) {
-                            case "#disconnect":
+                            case "#disconnect": {
                                 return;
                                 break;
-                            case "#handshake":
+                            }
+                            case "#handshake": {
                                 request = { type: "hello", version: "2" };
                                 break;
-                            case "p2p.peer.getBlocks":
+                            }
+                            case "p2p.peer.getBlocks": {
                                 maxPayload = constants.DEFAULT_MAX_PAYLOAD;
                                 request = { ...request, payload: getBlocks.request.serialize({ ...(headers as any), ...data.data }) };
                                 break;
-                            case "p2p.peer.getCommonBlocks":
+                            }
+                            case "p2p.peer.getCommonBlocks": {
                                 request = { ...request, payload: getCommonBlocks.request.serialize({ ...(headers as any), ...data.data }) };
                                 break;
-                            case "p2p.peer.getPeers":
+                            }
+                            case "p2p.peer.getPeers": {
                                 request = { ...request, payload: getPeers.request.serialize({ ...(headers as any) }) };
                                 break;
-                            case "p2p.peer.getStatus":
+                            }
+                            case "p2p.peer.getStatus": {
                                 request = { ...request, payload: getStatus.request.serialize({ ...(headers as any) }) };
                                 break;
-                            case "p2p.peer.postBlock":
+                            }
+                            case "p2p.peer.postBlock": {
                                 request = { ...request, payload: postBlock.request.serialize({ ...(headers as any), block: Buffer.from(data.data.block.data, "base64") }) };
                                 break;
-                            case "p2p.peer.postTransactions":
+                            }
+                            case "p2p.peer.postTransactions": {
                                 const transactions = data.data.transactions.map((transaction) => Transactions.TransactionFactory.fromData(transaction).serialized);
                                 request = { ...request, payload: postTransactions.request.serialize({ ...(headers as any), transactions }) };
                                 break;
+                            }
                         }
 
                         this.socket._receiver._maxPayload = maxPayload;

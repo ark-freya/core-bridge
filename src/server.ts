@@ -1,14 +1,13 @@
+import { app } from "@arkecosystem/core-container";
+import { Transactions } from "@arkecosystem/crypto";
 import fs from "fs";
 import path from "path";
-
 import { SCServerSocket } from "socketcluster-server";
-import { parseNesMessage, stringifyNesMessage } from "./nes";
+
 import { getBlocks, postBlock } from "./codecs/blocks";
 import { getCommonBlocks, getPeers, getStatus } from "./codecs/peer";
 import { postTransactions } from "./codecs/transactions";
-
-import { app } from "@arkecosystem/core-container";
-import { Transactions } from "@arkecosystem/crypto";
+import { parseNesMessage, stringifyNesMessage } from "./nes";
 
 export class Server {
     public extend(version: string, hidePrerelease: boolean, isPrerelease: boolean): void {
@@ -33,7 +32,7 @@ if (process.env.workerInitOptions) {
 
     (SCServerSocket.prototype as any)._send = SCServerSocket.prototype.send;
 
-    SCServerSocket.prototype.send = function (message) {
+    (SCServerSocket.prototype as any).send = function (message) {
         if (!this.socket._isNes) {
             if (workerOptions.hidePrerelease && workerOptions.isPrerelease && message !== "#1") {
                 try {
@@ -74,16 +73,19 @@ if (process.env.workerInitOptions) {
                         isError = false;
                     } else if (data && data.data) {
                         switch (event) {
-                            case "p2p.blocks.getBlocks":
+                            case "p2p.blocks.getBlocks": {
                                 payload = getBlocks.response.serialize(data.data);
                                 break;
-                            case "p2p.peer.getCommonBlocks":
+                            }
+                            case "p2p.peer.getCommonBlocks": {
                                 payload = getCommonBlocks.response.serialize(data.data);
                                 break;
-                            case "p2p.peer.getPeers":
+                            }
+                            case "p2p.peer.getPeers": {
                                 payload = getPeers.response.serialize(data.data);
                                 break;
-                            case "p2p.peer.getStatus":
+                            }
+                            case "p2p.peer.getStatus": {
                                 for (const plugin of Object.keys(data.data.config.plugins)) {
                                     if (plugin === "@arkecosystem/core-api") {
                                         data.data.config.plugins[plugin] = {
@@ -98,9 +100,11 @@ if (process.env.workerInitOptions) {
                                 data.data.config.version = workerOptions.version;
                                 payload = getStatus.response.serialize(data.data);
                                 break;
-                            case "p2p.transactions.postTransactions":
+                            }
+                            case "p2p.transactions.postTransactions": {
                                 payload = postTransactions.response.serialize(data.data);
                                 break;
+                            }
                         }
                     }
 
@@ -141,45 +145,54 @@ if (process.env.workerInitOptions) {
             const nesMessage = parseNesMessage(message);
             socket._isNes = true;
             switch (nesMessage.type) {
-                case "ping":
+                case "ping": {
                     return "#2";
                     break;
-                case "hello":
+                }
+                case "hello": {
                     return JSON.stringify({ event: "#handshake", data: {}, cid: 1 });
                     break;
-                case "request":
+                }
+                case "request": {
                     let data: any = {};
                     switch (nesMessage.path) {
-                        case "p2p.blocks.getBlocks":
+                        case "p2p.blocks.getBlocks": {
                             data = getBlocks.request.deserialize(nesMessage.payload);
                             break;
-                        case "p2p.blocks.postBlock":
+                        }
+                        case "p2p.blocks.postBlock": {
                             data = { block: { base64: true, data: postBlock.request.deserialize(nesMessage.payload).block.toString("base64") } };
                             break;
-                        case "p2p.peer.getCommonBlocks":
+                        }
+                        case "p2p.peer.getCommonBlocks": {
                             data = getCommonBlocks.request.deserialize(nesMessage.payload);
                             break;
-                        case "p2p.peer.getPeers":
+                        }
+                        case "p2p.peer.getPeers": {
                             data = getPeers.request.deserialize(nesMessage.payload);
                             break;
-                        case "p2p.peer.getStatus":
+                        }
+                        case "p2p.peer.getStatus": {
                             data = getStatus.request.deserialize(nesMessage.payload);
                             break;
-                        case "p2p.transactions.postTransactions":
+                        }
+                        case "p2p.transactions.postTransactions": {
                             data = postTransactions.request.deserialize(nesMessage.payload);
                             data.transactions = data.transactions.map((transaction) => Transactions.TransactionFactory.fromBytesUnsafe(transaction).data);
                             break;
+                        }
                     }
                     delete data.headers;
                     message = JSON.stringify({
-                        event: nesMessage.path.replace(/(p2p.blocks|p2p.transactions).(.*)/, "p2p.peer.$2"),
+                        event: (nesMessage.path || "").replace(/(p2p.blocks|p2p.transactions).(.*)/, "p2p.peer.$2"),
                         data: { data, headers: {} },
                         cid: nesMessage.id
                     });
                     break;
+                }
             }
 
-            if (nesMessage.path) {
+            if (nesMessage.path && nesMessage.id) {
                 if (!socket._ids) {
                     socket._ids = {};
                 }
@@ -191,8 +204,10 @@ if (process.env.workerInitOptions) {
                 socket._ids[nesMessage.id] = nesMessage.path;
 
                 socket._timers[nesMessage.id] = setTimeout(() => {
-                    delete socket._ids[nesMessage.id];
-                    delete socket._timers[nesMessage.id];
+                    if (nesMessage.id) {
+                        delete socket._ids[nesMessage.id];
+                        delete socket._timers[nesMessage.id];
+                    }
                 }, 30000);
             }
         } catch {

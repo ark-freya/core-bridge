@@ -4,7 +4,7 @@ const hardLimitNumberOfTransactions = 1000;
 
 export const postTransactions = {
     request: {
-        serialize: (obj): Buffer => {
+        serialize: (obj: { transactions: any }): Buffer => {
             const objShallowClone = { ...obj };
             objShallowClone.transactions = objShallowClone.transactions.reduce((acc, curr) => {
                 const txByteLength = Buffer.alloc(4);
@@ -13,7 +13,7 @@ export const postTransactions = {
             }, Buffer.alloc(0));
             return Buffer.from(transactions.PostTransactionsRequest.encode(objShallowClone).finish());
         },
-        deserialize: (payload: Buffer) => {
+        deserialize: (payload: Buffer): any => {
             const decoded = transactions.PostTransactionsRequest.decode(payload);
             const txsBuffer = Buffer.from(decoded.transactions);
             const txs: Buffer[] = [];
@@ -34,6 +34,6 @@ export const postTransactions = {
     },
     response: {
         serialize: (accept: string[]): Buffer => Buffer.from(transactions.PostTransactionsResponse.encode({ accept }).finish()),
-        deserialize: (payload: Buffer) => transactions.PostTransactionsResponse.decode(payload).accept
+        deserialize: (payload: Buffer): any[] => transactions.PostTransactionsResponse.decode(payload).accept
     }
 };

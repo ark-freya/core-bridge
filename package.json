@@ -10,13 +10,15 @@
     "license": "GPL-3.0-or-later",
     "main": "dist/index.js",
     "files": [
-        "dist"
+        "dist/*.js",
+        "dist/codecs/*.js",
+        "dist/codecs/proto/*.js"
     ],
     "scripts": {
-        "compile": "../../node_modules/typescript/bin/tsc",
+        "compile": "node_modules/typescript/bin/tsc",
         "build": "yarn clean && yarn compile",
         "clean": "del dist",
-        "lint": "../../node_modules/tslint/bin/tslint -c ../../tslint.json -p ../../tslint-config.json 'src/**/*.ts'--exclude='src/**/*.d.ts' --fix",
+        "lint": "../../node_modules/eslint/bin/eslint.js . --ext .ts --fix",
         "prettier": "prettier --write './**/*.{ts,js,json,md}'",
         "format": "yarn lint && yarn prettier"
     },
@@ -25,7 +27,14 @@
     },
     "devDependencies": {
         "@arkecosystem/core": "^2.7.0",
-        "prettier": "^2.0.2"
+        "@typescript-eslint/eslint-plugin": "^3.0.0",
+        "@typescript-eslint/parser": "^3.0.0",
+        "eslint": "^7.0.0",
+        "eslint-config-prettier": "^6.10.1",
+        "eslint-plugin-prettier": "^3.1.2",
+        "eslint-plugin-simple-import-sort": "^5.0.2",
+        "prettier": "^2.0.2",
+        "typescript": "^3.8.3"
     },
     "prettier": {
         "printWidth": 180,

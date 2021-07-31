@@ -1,4 +1,5 @@
 import { Utils } from "@arkecosystem/crypto";
+
 import { peer } from "./proto/protos";
 
 export const getPeers = {
@@ -7,10 +8,10 @@ export const getPeers = {
         deserialize: (payload: Buffer): {} => peer.GetPeersRequest.decode(payload)
     },
     response: {
-        serialize: (peers): Buffer => {
+        serialize: (peers: any[]): Buffer => {
             return Buffer.from(peer.GetPeersResponse.encode({ peers }).finish());
         },
-        deserialize: (payload: Buffer) => {
+        deserialize: (payload: Buffer): any[] => {
             return peer.GetPeersResponse.decode(payload).peers;
         }
     }
@@ -41,17 +42,17 @@ export const getStatus = {
         deserialize: (payload: Buffer): {} => peer.GetStatusRequest.decode(payload)
     },
     response: {
-        serialize: (obj): Buffer => {
+        serialize: (obj: peer.IGetStatusResponse): Buffer => {
             obj.state.header.totalAmount = obj.state.header.totalAmount.toString();
             obj.state.header.totalFee = obj.state.header.totalFee.toString();
             obj.state.header.reward = obj.state.header.reward.toString();
             return Buffer.from(peer.GetStatusResponse.encode(obj).finish());
         },
-        deserialize: (payload: Buffer) => {
+        deserialize: (payload: Buffer): peer.IGetStatusResponse => {
             const decoded = peer.GetStatusResponse.decode(payload);
-            const totalAmount = new Utils.BigNumber(decoded.state!.header!.totalAmount!);
-            const totalFee = new Utils.BigNumber(decoded.state!.header!.totalFee!);
-            const reward = new Utils.BigNumber(decoded.state!.header!.reward!);
+            const totalAmount = new Utils.BigNumber(decoded.state.header.totalAmount);
+            const totalFee = new Utils.BigNumber(decoded.state.header.totalFee);
+            const reward = new Utils.BigNumber(decoded.state.header.reward);
 
             return {
                 ...decoded,
@@ -59,9 +60,9 @@ export const getStatus = {
                     ...decoded.state,
                     header: {
                         ...decoded.state?.header,
-                        totalAmount,
-                        totalFee,
-                        reward
+                        totalAmount: totalAmount.toString(),
+                        totalFee: totalFee.toString(),
+                        reward: reward.toString()
                     }
                 }
             };

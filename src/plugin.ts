@@ -1,19 +1,18 @@
 import { app } from "@arkecosystem/core-container";
-import { defaults } from "./defaults";
 import { Container, Database } from "@arkecosystem/core-interfaces";
 import { Managers } from "@arkecosystem/crypto";
+import { lt } from "semver";
 
+import { defaults } from "./defaults";
 import { P2P } from "./p2p";
 import { Vote } from "./vote";
-
-import { lt } from "semver";
 
 export const plugin: Container.IPluginDescriptor = {
     pkg: require("../package.json"),
     alias: "core-bridge-2.7",
     defaults,
     async register(container: Container.IContainer, options): Promise<void> {
-        if (!options.enabled) {
+        if (!options || !options.enabled) {
             return;
         }
 
