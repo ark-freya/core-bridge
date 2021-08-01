@@ -1,5 +1,9 @@
 import { constants } from "@arkecosystem/core-p2p/dist/constants";
+import { parseNesMessage, stringifyNesMessage } from "@arkecosystem/core-p2p/dist/hapi-nes/utils";
 import { replySchemas } from "@arkecosystem/core-p2p/dist/schemas";
+import { getBlocks, postBlock } from "@arkecosystem/core-p2p/dist/socket-server/codecs/blocks";
+import { getCommonBlocks, getPeers, getStatus } from "@arkecosystem/core-p2p/dist/socket-server/codecs/peer";
+import { postTransactions } from "@arkecosystem/core-p2p/dist/socket-server/codecs/transactions";
 import { Managers, Validation } from "@arkecosystem/crypto";
 import { validate } from "json-validator-duplicated-keys";
 
@@ -38,6 +42,85 @@ export const validateAndParseResponse = (message: string): any => {
     }
 
     throw new Error();
+};
+
+export const updateHeaderVersion = (message: Buffer): Buffer => {
+    const parsed = parseNesMessage(message);
+    let data;
+
+    switch (parsed.path) {
+        case "p2p.blocks.getBlocks": {
+            data = getBlocks.request.deserialize(parsed.payload!);
+            break;
+        }
+        case "p2p.blocks.postBlock": {
+            data = postBlock.request.deserialize(parsed.payload!);
+            break;
+        }
+        case "p2p.peer.getCommonBlocks": {
+            data = getCommonBlocks.request.deserialize(parsed.payload!);
+            break;
+        }
+        case "p2p.peer.getPeers": {
+            data = getPeers.request.deserialize(parsed.payload!);
+            break;
+        }
+        case "p2p.peer.getStatus": {
+            data = getStatus.request.deserialize(parsed.payload!);
+            break;
+        }
+        case "p2p.transactions.postTransactions": {
+            data = postTransactions.request.deserialize(parsed.payload!);
+            break;
+        }
+    }
+
+    if (data && data.headers && data.headers.version) {
+        data.headers.version = data.headers.version.replace(/-(.*)/, "");
+        parsed.payload = data;
+        switch (parsed.path) {
+            case "p2p.blocks.getBlocks": {
+                parsed.payload = getBlocks.request.serialize(parsed.payload);
+                break;
+            }
+            case "p2p.blocks.postBlock": {
+                parsed.payload = postBlock.request.serialize(parsed.payload);
+                break;
+            }
+            case "p2p.peer.getCommonBlocks": {
+                parsed.payload = getCommonBlocks.request.serialize(parsed.payload);
+                break;
+            }
+            case "p2p.peer.getPeers": {
+                parsed.payload = getPeers.request.serialize(parsed.payload);
+                break;
+            }
+            case "p2p.peer.getStatus": {
+                parsed.payload = getStatus.request.serialize(parsed.payload);
+                break;
+            }
+            case "p2p.transactions.postTransactions": {
+                parsed.payload = postTransactions.request.serialize(parsed.payload);
+                break;
+            }
+        }
+        message = stringifyNesMessage(parsed);
+    }
+
+    return message;
+};
+
+export const updateStatusVersion = (message: Buffer): Buffer => {
+    const parsed = parseNesMessage(message);
+    const response = getStatus.response.deserialize(parsed.payload!);
+
+    if (response.state && response.config && response.config.version) {
+        response.config.version = response.config.version.replace(/-(.*)/, "");
+        parsed.payload = getStatus.response.serialize(response);
+        message = stringifyNesMessage(parsed);
+    }
+
+    return message;
 };
 
 const isValidRequest = (object, maxTransactionsPerRequest: number): boolean => {
