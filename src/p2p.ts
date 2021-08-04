@@ -1,4 +1,5 @@
-import { Container, Contracts, Providers } from "@arkecosystem/core-kernel";
+import { Container, Contracts, Providers, Utils } from "@arkecosystem/core-kernel";
+import { Interfaces } from "@arkecosystem/crypto";
 import { parse } from "semver";
 
 import { Client } from "./client";
@@ -12,6 +13,9 @@ export class P2P {
     @Container.inject(Container.Identifiers.PluginConfiguration)
     @Container.tagged("plugin", "@alessiodf/core-bridge-3.0")
     private readonly configuration!: Providers.PluginConfiguration;
+
+    @Container.inject(Container.Identifiers.PeerNetworkMonitor)
+    private readonly monitor!: Contracts.P2P.NetworkMonitor;
 
     public boot(): void {
         let realVersion: string = this.app.version();
@@ -33,5 +37,13 @@ export class P2P {
 
         const server = this.app.get<Server>(Symbol.for("Bridge<Server>"));
         server.extend(version, realVersion, hidePrerelease, isPrerelease);
+
+        if (this.monitor) {
+            (this.monitor as any).broadcastBlock = async function (block: Interfaces.IBlock): Promise<void> {
+                const peers: Contracts.P2P.Peer[] = this.repository.getPeers();
+                this.logger.info(`Broadcasting block ${block.data.height.toLocaleString()} to ${Utils.pluralize("peer", peers.length, true)}`);
+                await Promise.all(peers.map((peer) => this.communicator.postBlock(peer, block)));
+            };
+        }
     }
 }
