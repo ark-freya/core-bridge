@@ -1,5 +1,5 @@
 import { app } from "@arkecosystem/core-container";
-import { Container, Database } from "@arkecosystem/core-interfaces";
+import { Container, Database, P2P as CoreP2P } from "@arkecosystem/core-interfaces";
 import { Managers } from "@arkecosystem/crypto";
 import { lt } from "semver";
 
@@ -23,11 +23,13 @@ export const plugin: Container.IPluginDescriptor = {
             return;
         }
 
-        const p2p: P2P = new P2P();
-        p2p.register(options);
+        if (app.resolvePlugin<CoreP2P.IPeerService>("p2p")) {
+            const p2p: P2P = new P2P();
+            p2p.register(options);
 
-        logger.info("Loaded Core Bridge");
-        logger.info(`Core ${app.getVersion()} can now communicate with Core 3.0`);
+            logger.info("Loaded Core Bridge");
+            logger.info(`Core ${app.getVersion()} can now communicate with Core 3.0`);
+        }
 
         const aip37 = Math.min(
             Managers.configManager
