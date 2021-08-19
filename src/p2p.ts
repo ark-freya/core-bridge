@@ -1,5 +1,5 @@
 import { app } from "@arkecosystem/core-container";
-import { Container, P2P as CoreP2P } from "@arkecosystem/core-interfaces";
+import { Blockchain, Container, P2P as CoreP2P } from "@arkecosystem/core-interfaces";
 import { Interfaces } from "@arkecosystem/crypto";
 import pluralize from "pluralize";
 import { parse } from "semver";
@@ -28,6 +28,13 @@ export class P2P {
 
         const monitor = app.resolvePlugin<CoreP2P.IPeerService>("p2p").getMonitor();
         monitor.broadcastBlock = async function (block: Interfaces.IBlock): Promise<void> {
+            const blockchain = app.resolvePlugin<Blockchain.IBlockchain>("blockchain");
+
+            if (!blockchain) {
+                this.logger.info(`Skipping broadcast of block ${block.data.height.toLocaleString()} as blockchain is not ready`);
+                return;
+            }
+
             const peers: CoreP2P.IPeer[] = this.storage.getPeers();
             this.logger.info(`Broadcasting block ${block.data.height.toLocaleString()} to ${pluralize("peer", peers.length, true)}`);
             await Promise.all(peers.map((peer) => this.communicator.postBlock(peer, block)));
