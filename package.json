@@ -2,7 +2,7 @@
     "name": "@alessiodf/core-bridge-2.7",
     "description": "Communicate with ARK Core 3.0 nodes in Core 2.7",
     "homepage": "https://github.com/alessiodf/core-bridge/tree/core-bridge-2.7",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "contributors": [
         "alessiodf <alessiodf@pm.me>",
         "cactus1549 <cactus1549pool@gmail.com>"
