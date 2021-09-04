@@ -43,9 +43,12 @@ export const plugin: Container.IPluginDescriptor = {
         switchVote.register(options);
 
         if (aip37 !== Infinity) {
-            const currentHeight = (await app.resolvePlugin<Database.IDatabaseService>("database").getLastBlock()).data.height;
-            if (aip37 > currentHeight) {
-                logger.debug(`AIP37 will activate after height ${aip37.toLocaleString()}`);
+            const database: Database.IDatabaseService = app.resolvePlugin<Database.IDatabaseService>("database");
+            if (database) {
+                const currentHeight = (await database.getLastBlock()).data.height;
+                if (aip37 > currentHeight) {
+                    logger.debug(`AIP37 will activate after height ${aip37.toLocaleString()}`);
+                }
             }
         } else {
             logger.warn("No milestone configured to enable AIP37");
