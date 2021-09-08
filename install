@@ -1,0 +1,483 @@
+#!/usr/bin/env node
+
+const { existsSync, statSync, readdirSync, readFileSync, writeFileSync } = require("fs");
+const { inspect } = require("util");
+const { normalize, resolve } = require("path");
+const { spawnSync } = require("child_process");
+
+const home = require("os").homedir();
+const https = require("https");
+const readline = require("readline");
+
+const readlineInterface = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+readlineInterface.on("SIGINT", () => {
+    console.error();
+    error("  => Installation aborted");
+    process.exit(1);
+});
+
+function ask(question) {
+    return new Promise(resolve => {
+        readlineInterface.question(question, resolve);
+    });
+}
+
+async function askForMilestoneHeight() {
+    const response = (await ask(bold("  => ") + `Enter the height when switch vote activation will occur. If this is wrong, your node may fork: `)).trim();
+    const confirmedHeight = (parseInt(response).toString() === response && response > 0) || response === "";
+    if (!confirmedHeight) {
+        error("    => Invalid option");
+        return askForMilestoneHeight();
+    } else if (response === "") {
+        if (await confirm(bold("  => ") + `Leaving this blank may fork your node when switch votes are activated on the network. Sure? [y/${bold("N")}] `, ["y", "n"], "n") !== "y") {
+            return askForMilestoneHeight();
+        }
+    }
+    return parseInt(response) || undefined;
+}
+
+function bold(message) {
+    return `\x1b[1m${message}\x1b[22m`;
+}
+
+async function configure(isGlobal, network, path, token, version) {
+    console.log(bold("  => ") + `Configuring for ${bold(network)} on ${bold(token)}`);
+    let failure = false;
+    if (version === "2.7") {
+        try {
+            const aip37 = await getMilestoneHeight(isGlobal, network, path);
+            const pluginPath = `${home}/.config/${token}/${network}/plugins.js`;
+            const plugins = readFileSync(pluginPath).toString();
+
+            const blockchainStart = Math.max(plugins.indexOf(`"@arkecosystem/core-blockchain"`), plugins.indexOf(`'@arkecosystem/core-blockchain'`));
+            if (blockchainStart === -1) {
+                error("  => Cannot automatically configure Core as this network uses a custom plugins.js format");
+                error("    => Please follow the manual instructions at https://github.com/alessiodf/core-bridge");
+                return;
+            }
+
+            let isOurPlugin = false;
+            const updatedPlugins = plugins.split("\n").filter(line => {
+                let addLine = false;
+                if (Math.max(line.indexOf(`"@alessiodf/core-bridge-2.7"`), line.indexOf(`'@alessiodf/core-bridge-2.7'`)) > -1) {
+                    isOurPlugin = true;
+                }
+                if (!isOurPlugin) {
+                    addLine = true;
+                } else if (line.indexOf("}") > -1) {
+                    isOurPlugin = false;
+                }
+                return addLine;
+            }).map(line => {
+                if (Math.max(line.indexOf(`"@arkecosystem/core-blockchain"`), line.indexOf(`'@arkecosystem/core-blockchain'`)) > -1) {
+                    return `    "@alessiodf/core-bridge-2.7": {\n      aip37: ${aip37},\n    },\n` + line;
+                } else {
+                    return line;
+                }
+            }).join("\n");
+            writeFileSync(pluginPath, updatedPlugins);
+        } catch {
+            error("  => Failed to make configuration changes to plugins.js");
+            failure = true;
+        }
+
+        try {
+            const appPath = `${home}/.config/${token}/${network}/app.js`;
+            if (!existsSync(appPath)) {
+                let defaultPath;
+                if (isGlobal) {
+                    defaultPath = `${path}/@arkecosystem/core/bin/config/${network}/app.js`;
+                } else {
+                    defaultPath = `${path}/node_modules/@arkecosystem/core/bin/config/${network}/app.js`;
+                }
+
+                let defaultData = "module.exports = { cli: { core: { run: { plugins: { include: [] } } }, relay: { run: { plugins: { include: [] } } }, forger: { run: { plugins: { include: [] } } }, chain: { run: { plugins: { include: [] } } }, snapshot: { run: { plugins: { include: [] } } } } }";
+
+                if (existsSync(defaultPath)) {
+                    defaultData = readFileSync(defaultPath);
+                }
+
+                writeFileSync(appPath, defaultData);
+            }
+
+            const app = require(appPath);
+            for (const entry of Object.keys(app.cli)) {
+                const include = app.cli[entry].run.plugins.include;
+                if (!include.includes("@alessiodf/core-bridge-2.7")) {
+                    include.push("@alessiodf/core-bridge-2.7");
+                }
+            }
+            writeFileSync(appPath, `module.exports = ${inspect(app, false, null)}`);
+        } catch {
+            error("  => Failed to make configuration changes to app.js");
+            failure = true;
+        }
+    } else {
+        try {
+            const appPath = `${home}/.config/${token}/${network}/app.json`;
+            const app = JSON.parse(readFileSync(appPath).toString());
+            if (app.core.plugins.filter(plugin => plugin.package === "@arkecosystem/core-blockchain").length !== 1 || app.relay.plugins.filter(plugin => plugin.package === "@arkecosystem/core-blockchain").length !== 1) {
+                error("  => Cannot automatically configure Core as this network uses a custom app.json format");
+                error("    => Please follow the manual instructions at https://github.com/alessiodf/core-bridge");
+                return;
+            }
+
+            Object.keys(app).filter(entry => entry === "core" || entry === "relay").forEach(entry => {
+                app[entry].plugins = app[entry].plugins.filter(plugin => plugin.package !== "@alessiodf/core-bridge-3.0");
+                app[entry].plugins.splice(app[entry].plugins.findIndex(plugin => plugin.package === "@arkecosystem/core-blockchain"), 0, {
+                    package: "@alessiodf/core-bridge-3.0"
+                });
+            });
+            writeFileSync(appPath, JSON.stringify(app, undefined, 4));
+        } catch {
+            error("  => Failed to make configuration changes to app.json");
+            failure = true;
+        }
+    }
+
+    if (failure) {
+        error("    => Please follow the manual instructions at https://github.com/alessiodf/core-bridge");
+    }
+}
+
+async function confirm(question, answers, defaultAnswer) {
+    for (;;) {
+        let answer = (await ask(question)).trim().toLowerCase();
+        if (defaultAnswer && answer === "") {
+            answer = defaultAnswer;
+        }
+        if (answers.includes(answer)) {
+            return answer;
+        }
+        error("    => Invalid option");
+    }
+}
+
+async function downloadAndParseMilestones(isGlobal, network, path) {
+    const get = url => {
+        return new Promise(resolve => {
+            const req = https.get(url, res => {
+                let response = "";
+                res.setEncoding("utf8");
+                const MAX_HTTP_SIZE = 50;
+                res.on("data", chunk => {
+                    if (response.length < MAX_HTTP_SIZE && chunk.length < MAX_HTTP_SIZE) {
+                        response += chunk;
+                    } else {
+                        req.destroy();
+                        resolve(false);
+                    }
+                });
+                res.on(
+                    "end",
+                    async() => {
+                        if (res.statusCode === 200 && response.length <= MAX_HTTP_SIZE) {
+                            try {
+                                resolve(parseInt(response));
+                            } catch {
+                                resolve(false);
+                            }
+                        } else {
+                            resolve(false);
+                        }
+                    },
+                );
+            });
+            req.on("error", () => {
+                req.destroy();
+                resolve(false);
+            });
+            req.on("timeout", () => {
+                req.destroy();
+                resolve(false);
+            });
+        });
+    };
+
+    const networkConfig = (isGlobal ? path : `${path}/node_modules`) + `/@arkecosystem/crypto/dist/networks/${network}/network.json`;
+    const nethash = JSON.parse(readFileSync(networkConfig)).nethash;
+
+    const aip37Height = await get(`https://raw.githubusercontent.com/alessiodf/core-bridge/aip37-milestones/${nethash}`);
+
+    if (!aip37Height) {
+        error(`  => Could not automatically detect the switch vote activation height for ${network}`);
+    }
+
+    return aip37Height;
+}
+
+function error(message) {
+    console.error(`\x1b[31;1m${message}\x1b[22;0m`);
+}
+
+function findInstallations() {
+    const globalPath = `${home}/.config/yarn/global/node_modules/@arkecosystem/core`;
+
+    const installationCandidates = [];
+    const installations = [];
+    let customPath;
+
+    if (process.argv[2]) {
+        customPath = process.argv[2];
+        if (customPath.startsWith("~/")) {
+            customPath = home + customPath.substring(1);
+        }
+        installationCandidates.push(`${customPath}/packages/core`);
+    } else {
+        installationCandidates.push(globalPath);
+        installationCandidates.push(...readdirSync(home).map(file => `${home}/${file}/packages/core`).filter(path => existsSync(path) && statSync(path).isDirectory()));
+    }
+
+    for (const path of installationCandidates) {
+        try {
+            const version = JSON.parse(readFileSync(`${path}/package.json`)).version;
+            if (version.startsWith("2.") || version.startsWith("3.")) {
+                const isGlobal = path === globalPath;
+                installations.push({
+                    path: resolve(normalize(`${path}/../../`)),
+                    version,
+                    isGlobal
+                });
+            }
+        } catch {
+            //
+        }
+    }
+
+    if (installations.length === 0) {
+        if (process.argv[2]) {
+            error(`  => No installation of Core was found at ${customPath}`);
+            process.exit(1);
+        }
+        error("  => No installations of Core were found. You may specify a custom path on the command line");
+        process.exit(1);
+    }
+
+    return installations;
+}
+
+function findNetworks(version) {
+    const configPath = `${home}/.config`;
+    const configFile = version === "2.7" ? "plugins.js" : "app.json";
+    const networks = readdirSync(configPath).filter(file => file.endsWith("-core") && statSync(`${configPath}/${file}`).isDirectory()).map(core => {
+        return {
+            core,
+            networks: readdirSync(`${configPath}/${core}`).filter(file => existsSync(`${configPath}/${core}/${file}/${configFile}`))
+        }
+    }).filter(core => core.networks.length > 0);
+    if (networks.length === 0) {
+        error("  => Could not find any suitable networks. Check that Core is correctly configured");
+        process.exit(1);
+    }
+    return networks;
+}
+
+async function getInstallation(installations) {
+    let installation;
+
+    if (installations.length == 1) {
+        let question;
+        if (installations[0].isGlobal) {
+            question = bold("  => ") + `Are you sure you want to install ${bold("Core Bridge")} for ${bold(`Core ${installations[0].version}`)} (installed globally)? [${bold("Y")}/n] `;
+        } else {
+            question = bold("  => ") + `Are you sure you want to install ${bold("Core Bridge")} for ${bold(`Core ${installations[0].version}`)} in ${bold(installations[0].path)}? [${bold("Y")}/n] `;
+        }
+
+        const response = await confirm(question, ["y", "n"], "y");
+        if (response === "y") {
+            installation = installations[0];
+        } else {
+            error("  => Installation aborted");
+            process.exit(1);
+        }
+    } else {
+        console.log(bold("  => ") + `Multiple installations of ${bold("Core")} found. Please select one:`);
+        for (let i = 0; i < installations.length; i++) {
+            if (installations[i].isGlobal) {
+                console.log(`  ${bold("  => ")}${i+1}) ${bold(`Core ${installations[i].version}`)} (installed globally)`);
+            } else {
+                console.log(`  ${bold("  => ")}${i+1}) ${bold(`Core ${installations[i].version}`)} in ${bold(installations[i].path)}`);
+            }
+        }
+
+        const response = await confirm(bold(`    => Please choose from 1 to ${installations.length} or type Q to abort: `), ["q", ...Array.from({
+            length: installations.length
+        }, (_, i) => (i + 1).toString())]);
+        if (response === "q") {
+            error("  => Installation aborted");
+            process.exit(1);
+        }
+
+        installation = installations[response - 1];
+    }
+
+    return installation;
+}
+
+async function getMilestoneHeight(isGlobal, network, path) {
+    let aip37Height = await downloadAndParseMilestones(isGlobal, network, path);
+    if (aip37Height) {
+        console.log(bold("  => ") + `Automatically detected switch vote activation height at ${bold(aip37Height.toLocaleString())}`);
+    } else {
+        aip37Height = askForMilestoneHeight();
+    }
+    return aip37Height;
+}
+
+async function getNetwork(tokensAndNetworks) {
+    let network;
+
+    const networkList = [];
+    if (tokensAndNetworks.length == 1 && tokensAndNetworks[0].networks.length == 1) {
+        network = {
+            token: tokensAndNetworks[0].core,
+            network: tokensAndNetworks[0].networks[0]
+        };
+    } else {
+        for (const {
+                core,
+                networks
+            } of tokensAndNetworks) {
+            for (const net of networks) {
+                networkList.push({
+                    token: core,
+                    network: net
+                });
+            }
+        }
+
+        console.log(bold("  => ") + `Multiple networks were found. Please select one:`);
+        for (let i = 0; i < networkList.length; i++) {
+            console.log(`  ${bold("  => ")}${i+1}) ${bold(networkList[i].network)} on ${bold(networkList[i].token)}`);
+        }
+
+        const response = await confirm(bold(`    => Please choose from 1 to ${networkList.length} or type Q to abort: `), ["q", ...Array.from({
+            length: networkList.length
+        }, (_, i) => (i + 1).toString())]);
+        if (response === "q") {
+            error("  => Installation aborted");
+            process.exit(1);
+        }
+
+        network = networkList[response - 1];
+    }
+    return network;
+}
+
+async function go() {
+    if (process.stdout.columns >= 73 && process.stdout.rows >= 20) {
+        console.log();
+        console.log(`                                         ^^
+    ^^      ..           __________   __________           ..
+            [] :_       │\x1b[47m    \x1b[41m  \x1b[47m    \x1b[0m│ │\x1b[42m   \x1b[47m    \x1b[41m   \x1b[0m│       _: []     ^^
+           .[] : :-.    │\x1b[41m          \x1b[0m│ │\x1b[42m   \x1b[47m    \x1b[41m   \x1b[0m│    .-: : [].    
+         .: [] : : :\`._ │\x1b[47m____\x1b[41m__\x1b[47m____\x1b[0m│ │\x1b[42m___\x1b[47m____\x1b[41m___\x1b[0m│ _.\`: : : [] :.
+       .: : [] : : : : :._         │ │         _.: : : : : [] : :.
+     .: : : [] : : : : : :\`._      │ │      _.\`: : : : : : [] : : :.
+ _.-: : : : [] : : : : : : : :-.___│_│___.-: : : : : : : : [] : : : :-._
+ _:_:_:_:_:_[]_:_:_:_:_:_:_:_:_:_:_:_:_:_:_:_:_:_:_:_:_:_:_[]_:_:_:_:_:_
+!!!!!!!!!!!![]!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!![]!!!!!!!!!!!!
+^^^^^^^^^^^^[]^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[]^^^^^^^^^^^^
+            []      ${bold("Core Bridge by gym and cactus1549")}      []
+            []      ${bold("A plugin for ARK Core 2.7 and 3.0")}      []
+            []  ${bold("If it's useful, please leave us a review:")}  []
+            [] ${bold("http://marketsquare.io/projects/core-bridge")} []
+-~^-~^_~_^~/  \\~^-~^~_~^-~_^~-^~_^~-_^~-^~_~^~-~-~_~-^~__^/  \\~^-_~^-^_-~
+~ _~~- ~^-^~-^~~- ^~_^-^~~_ -~^_ _^~--~_-~^- _~~-~_~-^_ ~^-^~~-_^-~ ~^~-~`);
+        console.log();
+    }
+    console.log(bold("Core Bridge Installer"));
+    const installations = findInstallations();
+    const installation = await getInstallation(installations);
+    await install(installation);
+
+    console.log(bold("  => Installation successful"));
+    process.exit(0);
+}
+
+async function install({ isGlobal, path, version }) {
+    let message = bold("  => ") + `Installing ${bold("Core Bridge")} for ${bold(`Core ${version}`)} `;
+    if (isGlobal) {
+        message += "(installed globally)";
+    } else {
+        message += `in ${bold(path)}`;
+    }
+    message += " ...";
+    console.log(message);
+
+    const bridgeVersion = version.startsWith("2.") ? "2.7" : "3.0";
+
+    const networks = findNetworks(bridgeVersion);
+
+    const npmPackage = `@alessiodf/core-bridge-${bridgeVersion}`;
+    let yarn;
+    if (isGlobal) {
+        yarn = spawnSync(`yarn global add ${npmPackage}`, {
+            shell: true
+        });
+    } else {
+        yarn = spawnSync(`yarn add -W ${npmPackage}`, {
+            cwd: path,
+            shell: true
+        });
+    }
+
+    if (yarn.status !== 0) {
+        error("  => Failed to install Core Bridge:");
+        yarn.stderr.toString().split("\n").forEach(line => {
+            if (line.startsWith("error ")) {
+                error(`    => ${line.substring(6)}`);
+            } else if (line.startsWith("warning ")) {
+                error(`    => ${line.substring(8)}`);
+            } else if (line) {
+                error(`    => ${line}`);
+            }
+        });
+        process.exit(1);
+    }
+
+    const {
+        network,
+        token
+    } = await getNetwork(networks);
+    await configure(isGlobal, network, path, token, bridgeVersion);
+
+    await restart(bridgeVersion);
+}
+
+async function restart(version) {
+    const processes = spawnSync("pm2 jlist", {
+        shell: true
+    }).stdout.toString().split("\n").pop();
+
+    const pm2Processes = JSON.parse(processes).filter(
+        pm2Process => (pm2Process.name.endsWith("-core") || (pm2Process.name.endsWith("-forger") && version == "2.7") || pm2Process.name.endsWith("-relay")) &&
+        pm2Process.pm2_env && pm2Process.pm2_env.status === "online" && pm2Process.pm2_env.version.startsWith(version.substring(0, 2))
+    );
+
+    for (const pm2Process of pm2Processes) {
+        const response = await confirm(bold(`  => `) + `Do you want to restart ${bold(pm2Process.name)}? [${bold("Y")}/n] `, ["y", "n"], "y");
+        if (response === "y") {
+            const pm2 = spawnSync(`pm2 restart ${pm2Process.name} --update-env`, {
+                shell: true
+            });
+            if (pm2.status !== 0) {
+                error(`  => Failed to restart ${pm2Process.name}:`);
+                pm2.stderr.toString().split("\n").forEach(line => {
+                    if (line) {
+                        error(`    => ${line}`);
+                    }
+                });
+            } else {
+                console.log(bold(`  => ${pm2Process.name}`) + " restarted successfully");
+            }
+
+        }
+    }
+}
+
+go();
