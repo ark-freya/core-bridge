@@ -85,11 +85,11 @@ export const postBlock = {
         }
     },
     response: {
-        serialize: (status: boolean): Buffer => {
-            const buf = Buffer.alloc(1);
-            buf.writeUInt8(status ? 1 : 0, 0);
-            return buf;
+        serialize: (obj: blocks.IPostBlockResponse): Buffer => {
+            return Buffer.from(blocks.PostBlockResponse.encode(obj).finish());
         },
-        deserialize: (payload: Buffer): boolean => !!payload.readUInt8(0)
+        deserialize: (payload: Buffer): { status: boolean; height: number } => {
+            return blocks.PostBlockResponse.decode(payload);
+        }
     }
 };
