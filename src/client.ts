@@ -215,7 +215,7 @@ export class Client {
 
                             const event = this._ws._ids[rid];
                             if (event === "p2p.blocks.postBlock") {
-                                payload = postBlock.response.serialize(isError);
+                                payload = postBlock.response.serialize({ status: !isError, height: data.headers ? data.headers.height : undefined });
                                 isError = false;
                             } else if (data && data.data) {
                                 switch (this._ws._ids[rid]) {
