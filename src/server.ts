@@ -69,7 +69,7 @@ if (process.env.workerInitOptions) {
                     const event = this.socket._ids[rid];
 
                     if (event === "p2p.blocks.postBlock") {
-                        payload = postBlock.response.serialize(!!error);
+                        payload = postBlock.response.serialize({ status: !isError, height: data.headers ? data.headers.height : undefined });
                         isError = false;
                     } else if (data && data.data) {
                         switch (event) {

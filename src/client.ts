@@ -79,7 +79,9 @@ export class Client {
                                         break;
                                     }
                                     case "p2p.peer.postBlock": {
+                                        const data = postBlock.response.deserialize(nesMessage.payload);
                                         scObject.data.data = {};
+                                        scObject.data.headers.height = data.height;
                                         break;
                                     }
                                     case "p2p.peer.postTransactions": {
