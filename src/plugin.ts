@@ -47,13 +47,15 @@ export const plugin: Container.IPluginDescriptor = {
             if (database) {
                 const currentHeight = (await database.getLastBlock()).data.height;
                 if (aip37 > currentHeight) {
-                    logger.debug(`AIP37 will activate after height ${aip37.toLocaleString()}`);
+                    logger.debug(`Switch vote transactions will activate after height ${aip37.toLocaleString()}`);
+                } else {
+                    logger.debug("Switch vote transactions are active");
                 }
             }
         } else {
-            logger.warn("No milestone configured to enable AIP37");
+            logger.warn("No height defined to enable switch vote transactions");
             logger.warn("This is probably wrong and we will fork in future");
-            logger.warn("Configure the milestone height in plugins.js or add it to milestones.json");
+            logger.warn("Configure the AIP37 activation height in plugins.js");
         }
     }
 };
