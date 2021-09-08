@@ -12,10 +12,9 @@ export class P2P {
         let version: string = app.getVersion();
         const parsedVersion = parse(version);
 
+        version = version.replace(`${parsedVersion.major}.${parsedVersion.minor}.`, `3.${parsedVersion.major}${parsedVersion.minor}.`);
         const versionNonPrerelease: string = version.replace(/-(.*)/, "");
         const isPrerelease: boolean = version !== versionNonPrerelease;
-
-        version = version.replace(`${parsedVersion.major}.${parsedVersion.minor}.`, `3.${parsedVersion.major}${parsedVersion.minor}.`);
 
         if (options.hidePrerelease) {
             version = versionNonPrerelease;
