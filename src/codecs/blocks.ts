@@ -12,30 +12,35 @@ export const getBlocks = {
     },
     response: {
         serialize: (obj: any[]): Buffer => {
-            const blocksEncoded: Buffer[] = [];
+            const blockBuffers: Buffer[] = [];
+
             for (const block of obj) {
+                const txBuffers: Buffer[] = [];
+
+                if (block.transactions) {
+                    for (const transaction of block.transactions) {
+                        const txBuffer = Buffer.from(transaction, "hex");
+                        const txLengthBuffer = Buffer.alloc(4);
+                        txLengthBuffer.writeUInt32BE(txBuffer.byteLength, 0);
+                        txBuffers.push(txLengthBuffer, txBuffer);
+                    }
+                }
+
                 const blockEncoded = blocks.GetBlocksResponse.BlockHeader.encode({
                     ...block,
                     totalAmount: block.totalAmount.toString(),
                     totalFee: block.totalFee.toString(),
                     reward: block.reward.toString(),
-                    transactions: block.transactions
-                        ? block.transactions.reduce((acc, curr) => {
-                              const txBuffer = Buffer.from(curr, "hex");
-                              const txByteLength = Buffer.alloc(4);
-                              txByteLength.writeUInt32BE(txBuffer.byteLength, 0);
-                              return Buffer.concat([acc, txByteLength, txBuffer]);
-                          }, Buffer.alloc(0))
-                        : Buffer.alloc(0)
+                    transactions: Buffer.concat(txBuffers)
                 }).finish();
-                blocksEncoded.push(Buffer.from(blockEncoded));
+
+                const blockBuffer = Buffer.from(blockEncoded);
+                const blockLengthBuffer = Buffer.alloc(4);
+                blockLengthBuffer.writeUInt32BE(blockBuffer.length, 0);
+                blockBuffers.push(blockLengthBuffer, blockBuffer);
             }
 
-            return blocksEncoded.reduce((acc, curr) => {
-                const txByteLength = Buffer.alloc(4);
-                txByteLength.writeUInt32BE(curr.byteLength, 0);
-                return Buffer.concat([acc, txByteLength, curr]);
-            }, Buffer.alloc(0));
+            return Buffer.concat(blockBuffers);
         },
         deserialize: (payload: Buffer): any[] => {
             const blocksBuffer = Buffer.from(payload);
